@@ -15,6 +15,7 @@
 # DB_USER = "root"
 # DB_PASSWORD = "abcd1234"
 # DB_NAME = "project69"
+
 import os
 from dotenv import load_dotenv
 
