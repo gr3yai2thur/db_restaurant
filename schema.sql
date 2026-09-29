@@ -5,45 +5,40 @@
 --         เมนูชุด combo = M:N (menu_item × menu_item)
 --  ต้องมี: PK ทุกตาราง, FK ครบ, ชื่อตรงกับ db.py, sample data
 -- ============================================================
-DROP Table if EXISTS customer
-
-DROP Table if EXISTS menu_item
-
-DROP Table if EXISTS dining_table
-
-DROP Table if EXISTS food_order
-
-DROP Table if EXISTS order_item
-
-DROP Table if EXISTS combo
+DROP TABLE IF EXISTS combo;
+DROP TABLE IF EXISTS order_item;
+DROP TABLE IF EXISTS food_order;
+DROP TABLE IF EXISTS dining_table;
+DROP TABLE IF EXISTS menu_item;
+DROP TABLE IF EXISTS customer;
 
 show tables
 
-
-
 CREATE TABLE customer (
+    -- TODO: name, phone, member_tier
     cust_id     INT AUTO_INCREMENT PRIMARY KEY,
     name        VARCHAR(100) NOT NULL,
     phone       VARCHAR(10) UNIQUE,
     member_tier VARCHAR(50) DEFAULT 'normal'
-    -- TODO: name, phone, member_tier
     
 );
 CREATE TABLE menu_item (
+    -- TODO: name, category, price, is_available
     item_id     INT AUTO_INCREMENT PRIMARY KEY,
     name        VARCHAR (100) NOT NULL,
     category    VARCHAR (100) NOT NULL,
     price       INT NOT NULL,
     is_available VARCHAR(50) DEFAULT 'available'
-    -- TODO: name, category, price, is_available
 );
 CREATE TABLE dining_table (
+    -- TODO: seats, zone
     table_id    INT AUTO_INCREMENT PRIMARY KEY,
     seats       INT NOT NULL,
     zone        VARCHAR (50)
-    -- TODO: seats, zone
 );
 CREATE TABLE food_order (
+    -- TODO: cust_id (FK), table_id (FK), order_time (DATETIME), status ENUM('open','paid')
+    -- ★ ไม่ต้องมีคอลัมน์ยอดรวม — คำนวณจาก order_item × menu_item (ดู search_orders ใน db.py)
     order_id     INT AUTO_INCREMENT PRIMARY KEY,
     cust_id      INT NULL,
     table_id     INT NOT NULL,
@@ -53,8 +48,6 @@ CONSTRAINT fk_order_cust  FOREIGN KEY (cust_id)
         REFERENCES customer(cust_id),
 CONSTRAINT fk_order_table FOREIGN KEY (table_id)
         REFERENCES dining_table(table_id)
-    -- TODO: cust_id (FK), table_id (FK), order_time (DATETIME), status ENUM('open','paid')
-    -- ★ ไม่ต้องมีคอลัมน์ยอดรวม — คำนวณจาก order_item × menu_item (ดู search_orders ใน db.py)
 );
 CREATE TABLE order_item (         -- M:N: food_order × menu_item
     -- TODO: order_id (FK), item_id (FK), qty, note ; PRIMARY KEY (order_id, item_id)
@@ -91,7 +84,7 @@ INSERT INTO customer (name, phone, member_tier) VALUES
 ('Piti Yindee',      '0810000004', 'normal'),
 ('Wichai Kengkaj',   '0810000005', 'normal');
 
-INSERT INTO menu_item (name, categary, price, is_available) VALUES
+INSERT INTO menu_item (name, category, price, is_available) VALUES
 ('Margherita Pizza',      'Pizza',      259, 'available'),
 ('Pepperoni Pizza',       'Pizza',      289, 'available'),
 ('Spaghetti Carbonara',   'Pasta',      219, 'available'),
