@@ -1,12 +1,30 @@
+-- Active: 1790402056014@@127.0.0.1@3306@project69
 -- ============================================================
 --  schema.sql — ระบบร้านอาหาร (นิสิตออกแบบและเขียนเอง)
 --  กติกา: 1 ออเดอร์มีหลายเมนู (M:N: order × menu_item ผ่าน order_item),
 --         เมนูชุด combo = M:N (menu_item × menu_item)
 --  ต้องมี: PK ทุกตาราง, FK ครบ, ชื่อตรงกับ db.py, sample data
 -- ============================================================
+DROP Table if EXISTS customer
+
+DROP Table if EXISTS menu_item
+
+DROP Table if EXISTS dining_table
+
+DROP Table if EXISTS food_order
+
+DROP Table if EXISTS order_item
+
+DROP Table if EXISTS combo
+
+show tables
+
+
+
 CREATE TABLE customer (
     cust_id INT AUTO_INCREMENT PRIMARY KEY
     -- TODO: name, phone, member_tier
+    
 );
 CREATE TABLE menu_item (
     item_id INT AUTO_INCREMENT PRIMARY KEY
@@ -29,5 +47,7 @@ CREATE TABLE combo (              -- M:N: menu_item × menu_item
     combo_id INT AUTO_INCREMENT PRIMARY KEY
     -- TODO: item_id (FK -> menu_item), sub_item_id (FK -> menu_item), amount
 );
+
+
 -- TODO: INSERT ข้อมูลตัวอย่างทุกตาราง
 --   ★ ควรมีออเดอร์ status 'open' อย่างน้อย 1 โต๊ะ ไว้ทดสอบ "เปิดออเดอร์ซ้ำโต๊ะเดิมไม่ได้"
