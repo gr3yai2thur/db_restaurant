@@ -10,32 +10,43 @@ DROP TABLE IF EXISTS order_item;
 DROP TABLE IF EXISTS food_order;
 DROP TABLE IF EXISTS dining_table;
 DROP TABLE IF EXISTS menu_item;
+DROP TABLE IF EXISTS category;
 DROP TABLE IF EXISTS customer;
 
-show tables
+show tables;
 
 CREATE TABLE customer (
     -- TODO: name, phone, member_tier
     cust_id     INT AUTO_INCREMENT PRIMARY KEY,
     name        VARCHAR(100) NOT NULL,
     phone       VARCHAR(10) UNIQUE,
-    member_tier VARCHAR(50) DEFAULT 'normal'
-    
+    member_tier ENUM('normal','silver','gold','vip') DEFAULT 'normal',
+    points      INT NOT NULL DEFAULT 0
 );
+
+CREATE TABLE category (
+    category_id   INT AUTO_INCREMENT PRIMARY KEY,
+    name          VARCHAR(100) NOT NULL UNIQUE
+);
+
 CREATE TABLE menu_item (
     -- TODO: name, category, price, is_available
-    item_id     INT AUTO_INCREMENT PRIMARY KEY,
-    name        VARCHAR (100) NOT NULL,
-    category    VARCHAR (100) NOT NULL,
-    price       INT NOT NULL,
-    is_available VARCHAR(50) DEFAULT 'available'
+    item_id      INT AUTO_INCREMENT PRIMARY KEY,
+    name         VARCHAR(100) NOT NULL,
+    category_id  INT NOT NULL,
+    price        INT NOT NULL CHECK (price >= 0),
+    status       ENUM('available','sold_out','discontinued') NOT NULL DEFAULT 'available',
+    CONSTRAINT fk_item_category FOREIGN KEY (category_id)
+        REFERENCES category(category_id)
 );
+
 CREATE TABLE dining_table (
     -- TODO: seats, zone
     table_id    INT AUTO_INCREMENT PRIMARY KEY,
     seats       INT NOT NULL,
     zone        VARCHAR (50)
 );
+
 CREATE TABLE food_order (
     -- TODO: cust_id (FK), table_id (FK), order_time (DATETIME), status ENUM('open','paid')
     -- ★ ไม่ต้องมีคอลัมน์ยอดรวม — คำนวณจาก order_item × menu_item (ดู search_orders ใน db.py)
@@ -44,23 +55,27 @@ CREATE TABLE food_order (
     table_id     INT NOT NULL,
     order_time   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     status       ENUM('open','paid') NOT NULL DEFAULT 'open',
+    payment_method ENUM('cash','card','qr') NULL,
 CONSTRAINT fk_order_cust  FOREIGN KEY (cust_id)
         REFERENCES customer(cust_id),
 CONSTRAINT fk_order_table FOREIGN KEY (table_id)
         REFERENCES dining_table(table_id)
 );
-CREATE TABLE order_item (         -- M:N: food_order × menu_item
+
+CREATE TABLE order_item (       -- M:N: food_order × menu_item
     -- TODO: order_id (FK), item_id (FK), qty, note ; PRIMARY KEY (order_id, item_id)
-    order_id    INT NOT NULL, 
-    item_id     INT NOT NULL, 
-    qty         INT NOT NULL,
-    note        VARCHAR (100),
+    order_id    INT NOT NULL,
+    item_id     INT NOT NULL,
+    qty         INT NOT NULL CHECK (qty > 0),
+    unit_price  INT NOT NULL CHECK (unit_price > 0),
+    note        VARCHAR(100),
 CONSTRAINT pk_order_item    PRIMARY KEY (order_id, item_id),
 CONSTRAINT fk_orderitem_order  FOREIGN KEY (order_id)  
     REFERENCES food_order(order_id),
 CONSTRAINT fk_orderitem_item  FOREIGN KEY (item_id)  
     REFERENCES menu_item(item_id) 
 );
+
 CREATE TABLE combo (              -- M:N: menu_item × menu_item
     combo_id    INT AUTO_INCREMENT PRIMARY KEY,
     item_id     INT NOT NULL,
@@ -75,7 +90,6 @@ CONSTRAINT chk_combo_not_self CHECK (item_id <> sub_item_id)
     -- TODO: item_id (FK -> menu_item), sub_item_id (FK -> menu_item), amount
 );
 
-
 -- TODO: INSERT ข้อมูลตัวอย่างทุกตาราง
 INSERT INTO customer (name, phone, member_tier) VALUES
 ('Somchai Jaidee',   '0810000001', 'vip'),
@@ -84,23 +98,36 @@ INSERT INTO customer (name, phone, member_tier) VALUES
 ('Piti Yindee',      '0810000004', 'normal'),
 ('Wichai Kengkaj',   '0810000005', 'normal');
 
-INSERT INTO menu_item (name, category, price, is_available) VALUES
-('Margherita Pizza',      'Pizza',      259, 'available'),
-('Pepperoni Pizza',       'Pizza',      289, 'available'),
-('Spaghetti Carbonara',   'Pasta',      219, 'available'),
-('Spaghetti Bolognese',   'Pasta',      229, 'available'),
-('Classic Cheeseburger',  'Burger',     189, 'available'),
-('BBQ Bacon Burger',      'Burger',     229, 'available'),
-('Caesar Salad',          'Salad',      159, 'available'),
-('Grilled Beef Steak',    'Steak',      399, 'available'),
-('California Sushi Roll', 'Japanese',   199, 'available'),
-('Salmon Sashimi',        'Japanese',   249, 'sold_out'),
-('French Fries',          'Side',        79, 'available'),
-('Coca-Cola',             'Beverage',    35, 'available'),
-('Iced Lemon Tea',        'Beverage',    45, 'available'),
-('Chocolate Lava Cake',   'Dessert',    129, 'available'),
-('Tiramisu',              'Dessert',    139, 'available'),
-('Burger + Fries + Coke Set', 'Combo',  249, 'available');
+INSERT INTO category (name) VALUES
+('Pizza'),      -- 1
+('Pasta'),      -- 2
+('Burger'),     -- 3
+('Salad'),      -- 4
+('Steak'),      -- 5
+('Japanese'),   -- 6
+('Side'),       -- 7
+('Beverage'),   -- 8
+('Dessert'),    -- 9
+('Combo');      -- 10
+
+INSERT INTO menu_item (name, category_id, price, status) VALUES
+('Margherita Pizza',           1, 259, 'available'),     -- 1
+('Pepperoni Pizza',            1, 289, 'available'),     -- 2
+('Spaghetti Carbonara',        2, 219, 'available'),     -- 3
+('Spaghetti Bolognese',        2, 229, 'available'),     -- 4
+('Classic Cheeseburger',       3, 189, 'available'),     -- 5
+('BBQ Bacon Burger',           3, 229, 'available'),     -- 6
+('Caesar Salad',               4, 159, 'available'),     -- 7
+('Grilled Beef Steak',         5, 399, 'available'),     -- 8
+('California Sushi Roll',      6, 199, 'available'),     -- 9
+('Salmon Sashimi',             6, 249, 'sold_out'),      -- 10
+('French Fries',               7,  79, 'available'),     -- 11
+('Coca-Cola',                  8,  35, 'available'),     -- 12
+('Iced Lemon Tea',             8,  45, 'available'),     -- 13
+('Chocolate Lava Cake',        9, 129, 'available'),     -- 14
+('Tiramisu',                   9, 139, 'available'),     -- 15
+('Burger + Fries + Coke Set', 10, 249, 'available'),     -- 16
+('Truffle Fries',              7,  99, 'discontinued');  -- 17
 
 INSERT INTO dining_table (seats, zone) VALUES
 (4, 'Indoor'),
@@ -117,27 +144,27 @@ INSERT INTO food_order (cust_id, table_id, order_time, status) VALUES
 (1, 2, '2026-09-25 20:00:00', 'paid'),
 (4, 5, '2026-09-26 11:45:00', 'open');
 
-INSERT INTO order_item (order_id, item_id, qty, note) VALUES
+INSERT INTO order_item (order_id, item_id, qty, unit_price, note) VALUES
 -- order 1: Margherita Pizza x1, Coke x2
-(1, 1, 1, NULL),
-(1, 12, 2, NULL),
+(1, 1,  1, 259, NULL),
+(1, 12, 2,  35, NULL),
 -- order 2: Carbonara x1, Caesar Salad x1, Lemon Tea x1
-(2, 3, 1, 'Extra cheese'),
-(2, 7, 1, NULL),
-(2, 13, 1, NULL),
--- order 3: Beef Steak x1, Fries x2, Bolognese x1  (รวมเกิน 500)
-(3, 8, 1, 'Medium rare'),
-(3, 11, 2, NULL),
-(3, 4, 1, NULL),
+(2, 3,  1, 219, 'Extra cheese'),
+(2, 7,  1, 159, NULL),
+(2, 13, 1,  45, NULL),
+-- order 3: Beef Steak x1, Fries x2, Bolognese x1 (รวม 786 เกิน 500)
+(3, 8,  1, 399, 'Medium rare'),
+(3, 11, 2,  79, NULL),
+(3, 4,  1, 229, NULL),
 -- order 4: Cheeseburger x4, Coke x4
-(4, 5, 4, NULL),
-(4, 12, 4, NULL),
+(4, 5,  4, 189, NULL),
+(4, 12, 4,  35, NULL),
 -- order 5: BBQ Bacon Burger x2, Carbonara x1, Lemon Tea x2
-(5, 6, 2, NULL),
-(5, 3, 1, NULL),
-(5, 13, 2, NULL),
+(5, 6,  2, 229, NULL),
+(5, 3,  1, 219, NULL),
+(5, 13, 2,  45, NULL),
 -- order 6: Combo Set x1 (ยัง open อยู่)
-(6, 16, 1, NULL);
+(6, 16, 1, 249, NULL);
 
 INSERT INTO combo (item_id, sub_item_id, amount) VALUES
 (16, 5, 1),   -- Classic Cheeseburger
