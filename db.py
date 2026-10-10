@@ -272,19 +272,22 @@ def delete_order(order_id):
 #  ★ ชื่อคอลัมน์ใน SELECT จะกลายเป็นหัวตารางบนเว็บ — ใช้ AS 'ชื่อภาษาไทย' ได้
 # ============================================================
 def report_summary():
-    """ตัวเลขสรุปบนการ์ด dashboard — คืน dict {ชื่อการ์ด: ตัวเลข}  (1 คีย์ = 1 การ์ด)
-    ตอนนี้ยังไม่ได้เขียน SQL → คืนค่า None ทุกการ์ด หน้าเว็บจึงแสดง "—" รอไว้
-    ★ งานของนิสิต: เขียน SQL ตามตัวอย่างด้านล่าง (1 คอลัมน์ใน SELECT = 1 การ์ด
-      ชื่อหลัง AS = ข้อความใต้ตัวเลข) แล้วลบ return {...} ชุดล่างสุดทิ้ง
-    ★ การ์ด "คิดเพิ่มเอง" 2 ใบ: ตั้งชื่อการ์ดใหม่ แล้วเขียน SQL เอง
-    ★ ผลรวมเงินใช้ IFNULL(SUM(...), 0) — ถ้ายังไม่มีข้อมูล SUM จะได้ NULL"""
-    # ---- ตัวอย่างเมื่อเขียน SQL แล้ว (เอา # ข้างหน้าออก แล้วเติมให้ครบทุกการ์ด) ----
-    # sql = """SELECT
-    #            (SELECT COUNT(*) FROM ...) AS 'ลูกค้า',
-    #            (SELECT ...)               AS 'เมนู',
-    #            ...
-    #          """
-    # return run_query(sql)[0]      ← [0] = เอาแถวแรก (ผลมีแถวเดียว) ได้เป็น dict
+    """ตัวเลขสรุปบนการ์ด dashboard — คืน dict {ชื่อการ์ด: ตัวเลข}"""
+    sql = """SELECT
+               (SELECT COUNT(*) FROM customer)   AS 'ลูกค้า',
+               (SELECT COUNT(*) FROM menu_item)  AS 'เมนู',
+               (SELECT COUNT(*) FROM food_order) AS 'ออเดอร์',
+               (SELECT IFNULL(SUM(qty * unit_price), 0)
+                  FROM order_item)               AS 'ยอดขายรวม',
+               (SELECT COUNT(*) FROM food_order
+                 WHERE status = 'open')          AS 'ออเดอร์ที่ยังไม่จ่าย',
+               (SELECT IFNULL(ROUND(SUM(oi.qty * oi.unit_price)
+                                    / COUNT(DISTINCT oi.order_id)), 0)
+                  FROM order_item oi
+                 INNER JOIN food_order o ON o.order_id = oi.order_id
+                 WHERE o.status = 'paid')        AS 'ยอดเฉลี่ยต่อบิล'
+          """
+    return run_query(sql)[0]
 
     # TODO: ระหว่างที่ยังไม่ได้เขียน SQL คืนค่า None ให้การ์ดแสดง "—" รอไว้
     return {
@@ -297,22 +300,38 @@ def report_summary():
     }
 
 def report_popular_items():
-    """📈 เมนูขายดี (Best Sellers)
-    คำใบ้: JOIN order_item→menu_item, GROUP BY item, SUM(qty), ORDER BY DESC, LIMIT 5"""
-    # TODO: เขียน SQL รายงานนี้ (เขียน JOIN แบบ explicit INNER JOIN ... ON ...)
-    _todo("report_popular_items")
+    """📈 เมนูขายดี (Best Sellers)"""
+    return run_query(
+        "SELECT m.item_id, m.name, SUM(oi.qty) AS total_qty "
+        "FROM order_item oi "
+        "INNER JOIN menu_item m ON m.item_id = oi.item_id "
+        "GROUP BY m.item_id, m.name "
+        "ORDER BY total_qty DESC, m.item_id "
+        "LIMIT 5"
+    )
 
 def report_daily_sales():
-    """💰 ยอดขายรวมต่อวัน (Daily Sales)
-    คำใบ้: JOIN food_order→order_item→menu_item, GROUP BY วันที่, SUM(qty*price)"""
-    # TODO: เขียน SQL รายงานนี้ (เขียน JOIN แบบ explicit INNER JOIN ... ON ...)
-    _todo("report_daily_sales")
+    """💰 ยอดขายรวมต่อวัน (Daily Sales)"""
+    return run_query(
+        "SELECT DATE(o.order_time) AS day, "
+        "SUM(oi.qty * oi.unit_price) AS total_sales "
+        "FROM food_order o "
+        "INNER JOIN order_item oi ON oi.order_id = o.order_id "
+        "GROUP BY DATE(o.order_time) "
+        "ORDER BY day"
+    )
 
 def report_big_orders():
-    """🧾 ออเดอร์ยอดเกิน 500 บาท (HAVING)
-    คำใบ้: GROUP BY order, HAVING SUM(qty*price) > 500"""
-    # TODO: เขียน SQL รายงานนี้ (เขียน JOIN แบบ explicit INNER JOIN ... ON ...)
-    _todo("report_big_orders")
+    """🧾 ออเดอร์ยอดเกิน 500 บาท (HAVING)"""
+    return run_query(
+        "SELECT o.order_id, o.table_id, o.order_time, "
+        "SUM(oi.qty * oi.unit_price) AS total "
+        "FROM food_order o "
+        "INNER JOIN order_item oi ON oi.order_id = o.order_id "
+        "GROUP BY o.order_id, o.table_id, o.order_time "
+        "HAVING SUM(oi.qty * oi.unit_price) > 500 "
+        "ORDER BY total DESC"
+    )
 
 # ============================================================
 #  รายการรายงานที่แสดงบนหน้า /report  (เรียงตามลำดับที่แสดง)
