@@ -39,6 +39,15 @@ const ENTITIES = {
         "type": "text"
       },
       {
+        "key": "gender",
+        "label": "เพศ",
+        "type": "select",
+        "options": [
+          "F",
+          "M"
+        ]
+      },
+      {
         "key": "phone",
         "label": "เบอร์โทร",
         "type": "text"
@@ -49,8 +58,14 @@ const ENTITIES = {
         "type": "select",
         "options": [
           "silver",
-          "gold"
+          "gold",
+          "VIP"
         ]
+      },
+      {
+        "key": "points",
+        "label": "แต้มสะสม",
+        "type": "text"
       }
     ]
   },

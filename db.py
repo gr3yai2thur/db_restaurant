@@ -65,26 +65,35 @@ def search_customers(filters):
 
 def get_customer(cust_id):
     """ดึง ลูกค้า 1 รายการตาม cust_id (ใช้ตอนเปิดฟอร์มแก้ไข)"""
-    # TODO: SELECT * FROM customer WHERE cust_id = %s แล้วคืนแถวเดียว
-    _todo("get_customer")
+    rows = run_query("SELECT * FROM customer WHERE cust_id = %s", (cust_id,))
+    return rows[0] if rows else None
 
 
 def create_customer(data):
     """เพิ่ม ลูกค้า ใหม่ — data มีคีย์: name, phone, member_tier"""
-    # TODO: INSERT INTO customer (...) VALUES (%s, ...)
-    _todo("create_customer")
+    return run_command(
+        "INSERT INTO customer (name, gender, phone, member_tier) "
+        "VALUES (%s, %s, %s, %s)",
+        (data["name"], data["gender"], blank_to_none(data["phone"]), data["member_tier"])
+    )
 
 
 def update_customer(cust_id, data):
     """แก้ไข ลูกค้า ตาม cust_id"""
-    # TODO: UPDATE customer SET ... WHERE cust_id=%s
-    _todo("update_customer")
+    return run_command(
+        "UPDATE customer SET name = %s, gender = %s, phone = %s, "
+        "member_tier = %s, points = %s WHERE cust_id = %s",
+        (data["name"], data["gender"], blank_to_none(data["phone"]),
+         data["member_tier"], data["points"], cust_id,)
+    )
 
 
 def delete_customer(cust_id):
     """ลบ ลูกค้า ตาม cust_id"""
-    # TODO: DELETE FROM customer WHERE cust_id=%s
-    _todo("delete_customer")
+    return run_command(
+        "DELETE FROM customer WHERE cust_id = %s",
+        (cust_id,)
+    )
 
 # ---------- เมนูอาหาร (menu_item) ----------
 def search_items(filters):
@@ -124,26 +133,38 @@ def search_items(filters):
 
 def get_item(item_id):
     """ดึง เมนูอาหาร 1 รายการตาม item_id (ใช้ตอนเปิดฟอร์มแก้ไข)"""
-    # TODO: SELECT * FROM menu_item WHERE item_id = %s แล้วคืนแถวเดียว
-    _todo("get_item")
+    rows = run_query(
+        "SELECT * FROM menu_item WHERE item_id = %s",
+        (item_id,)
+    )
+    return rows[0] if rows else None
 
 
 def create_item(data):
-    """เพิ่ม เมนูอาหาร ใหม่ — data มีคีย์: name, category, price, is_available"""
-    # TODO: INSERT INTO menu_item (...) VALUES (%s, ...)
-    _todo("create_item")
+    """เพิ่ม เมนูอาหาร ใหม่ — data มีคีย์: name, category_id, price, status"""
+    return run_command(
+        "INSERT INTO menu_item (name, category_id, price, status) "
+        "VALUES (%s, %s, %s, %s)",
+        (data["name"], data["category_id"], data["price"], data["status"])
+    )
 
 
 def update_item(item_id, data):
     """แก้ไข เมนูอาหาร ตาม item_id"""
-    # TODO: UPDATE menu_item SET ... WHERE item_id=%s
-    _todo("update_item")
+    return run_command(
+        "UPDATE menu_item SET name = %s, category_id = %s, price = %s, "
+        "status = %s WHERE item_id = %s",
+        (data["name"], data["category_id"], data["price"],
+         data["status"], item_id,)
+    )
 
 
 def delete_item(item_id):
     """ลบ เมนูอาหาร ตาม item_id"""
-    # TODO: DELETE FROM menu_item WHERE item_id=%s
-    _todo("delete_item")
+    return run_command(
+        "DELETE FROM menu_item WHERE item_id = %s",
+        (item_id,)
+    )
 
 # ---------- ออเดอร์ (food_order) ----------
 def search_orders(filters):
@@ -185,8 +206,11 @@ def search_orders(filters):
 
 def get_order(order_id):
     """ดึง ออเดอร์ 1 รายการตาม order_id (ใช้ตอนเปิดฟอร์มแก้ไข)"""
-    # TODO: SELECT * FROM food_order WHERE order_id = %s แล้วคืนแถวเดียว
-    _todo("get_order")
+    rows = run_query(
+        "SELECT * FROM food_order WHERE order_id = %s",
+        (order_id,)
+    )
+    return rows[0] if rows else None
 
 
 def check_table_free(table_id, order_id=None):
@@ -202,13 +226,15 @@ def check_table_free(table_id, order_id=None):
 
 
 def create_order(data):
-    """เพิ่ม ออเดอร์ ใหม่ — data มีคีย์: cust_id, table_id, order_time, status
-    คำใบ้:
-      1) ถ้า status = 'open' → เรียก check_table_free(data["table_id"]) ก่อน (โต๊ะต้องว่าง)
-      2) INSERT INTO food_order (...) VALUES (%s, ...)
-         (order_time ว่างได้ → blank_to_none(data["order_time"]))"""
-    # TODO: เขียนตามคำใบ้
-    _todo("create_order")
+    """เพิ่ม ออเดอร์ ใหม่ — data มีคีย์: cust_id, table_id, order_time, status"""
+    if data["status"] == "open":
+        check_table_free(data["table_id"])
+    return run_command(
+        "INSERT INTO food_order (cust_id, table_id, order_time, status) "
+        "VALUES (%s, %s, COALESCE(%s, NOW()), %s)",
+        (data["cust_id"], data["table_id"],
+         blank_to_none(data["order_time"]), data["status"])
+    )
 
 
 def update_order(order_id, data):
@@ -224,7 +250,10 @@ def update_order(order_id, data):
 def delete_order(order_id):
     """ลบ ออเดอร์ ตาม order_id"""
     # TODO: DELETE FROM food_order WHERE order_id=%s
-    _todo("delete_order")
+    return run_command(
+        "DELETE FROM food_order WHERE order_id = %s",
+        (order_id,)
+    )
 
 
 # ============================================================

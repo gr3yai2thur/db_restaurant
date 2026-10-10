@@ -27,6 +27,7 @@ CREATE TABLE customer (
     -- TODO: name, phone, member_tier
     cust_id     INT AUTO_INCREMENT PRIMARY KEY,
     name        VARCHAR(100) NOT NULL,
+    gender      VARCHAR(1) NOT NULL,
     phone       VARCHAR(10) UNIQUE,
     member_tier ENUM('normal','silver','gold','vip') DEFAULT 'normal',
     points      INT NOT NULL DEFAULT 0
@@ -153,12 +154,12 @@ ORDER BY o.order_id;
 -------- Insert Data --------
 
 -- TODO: INSERT ข้อมูลตัวอย่างทุกตาราง
-INSERT INTO customer (name, phone, member_tier) VALUES
-('Somchai Jaidee',   '0810000001', 'vip'),
-('Suda Rakdee',      '0810000002', 'gold'),
-('Mana Tangjai',     '0810000003', 'silver'),
-('Piti Yindee',      '0810000004', 'normal'),
-('Wichai Kengkaj',   '0810000005', 'normal');
+INSERT INTO customer (name, gender, phone, member_tier) VALUES
+('Somchai Jaidee',   'M', '0810000001', 'vip'),
+('Suda Rakdee',      'F', '0810000002', 'gold'),
+('Mana Tangjai',     'M', '0810000003', 'silver'),
+('Piti Yindee',      'M', '0810000004', 'normal'),
+('Wichai Kengkaj',   'M', '0810000005', 'normal');
 
 INSERT INTO category (name) VALUES
 ('Pizza'),      -- 1
