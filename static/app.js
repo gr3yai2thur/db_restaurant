@@ -80,7 +80,7 @@ const ENTITIES = {
         "type": "text"
       },
       {
-        "key": "category",
+        "key": "category_id",
         "label": "หมวดหมู่",
         "type": "text"
       }
@@ -92,7 +92,7 @@ const ENTITIES = {
         "type": "text"
       },
       {
-        "key": "category",
+        "key": "category_id",
         "label": "หมวดหมู่",
         "type": "text"
       },
@@ -102,12 +102,14 @@ const ENTITIES = {
         "type": "number"
       },
       {
-        "key": "is_available",
+        "key": "status",
         "label": "พร้อมขาย",
         "type": "select",
         "options": [
-          "1",
-          "0"
+          "",
+          "available",
+          "sold_out",
+          "discontinued"
         ]
       }
     ]

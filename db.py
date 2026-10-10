@@ -72,9 +72,9 @@ def get_customer(cust_id):
 def create_customer(data):
     """เพิ่ม ลูกค้า ใหม่ — data มีคีย์: name, phone, member_tier"""
     return run_command(
-        "INSERT INTO customer (name, gender, phone, member_tier) "
-        "VALUES (%s, %s, %s, %s)",
-        (data["name"], data["gender"], blank_to_none(data["phone"]), data["member_tier"])
+        "INSERT INTO customer (name, gender, phone, member_tier, points) "
+        "VALUES (%s, %s, %s, %s, %s)",
+        (data["name"], data["gender"], blank_to_none(data["phone"]), data["member_tier"], data["points"])
     )
 
 
@@ -214,15 +214,23 @@ def get_order(order_id):
 
 
 def check_table_free(table_id, order_id=None):
-    """ตรวจก่อนเปิดออเดอร์ (status = 'open') — ถ้าไม่ผ่านให้ raise ValueError("ข้อความ")
-    (หน้าเว็บจะแสดงข้อความนั้นเป็น alert ให้ผู้ใช้เห็น และไม่บันทึกข้อมูล)
-    1) โต๊ะต้องมีอยู่จริง → SELECT ... FROM dining_table WHERE table_id = %s
-    2) โต๊ะต้องว่าง = ไม่มีออเดอร์อื่นที่ยัง 'open' อยู่ที่โต๊ะนี้
-       → SELECT COUNT(*) AS n FROM food_order WHERE table_id = %s AND status = 'open' AND order_id <> %s
-       ★ ตอนเพิ่มใหม่ order_id เป็น None → ส่ง 0 แทน (order_id or 0) จะได้ไม่ตรงกับออเดอร์ไหนเลย
-    ตัวอย่าง: raise ValueError(f"โต๊ะ {table_id} ยังมีออเดอร์ที่ยังไม่ชำระเงิน")"""
-    # TODO: เขียนการตรวจ 2 ข้อตามคำใบ้
-    _todo("check_table_free")
+    """ตรวจก่อนเปิดออเดอร์ (status = 'open') — ถ้าไม่ผ่านให้ raise ValueError("ข้อความ")"""
+    # 1) โต๊ะต้องมีอยู่จริง
+    rows = run_query(
+        "SELECT table_id FROM dining_table WHERE table_id = %s",
+        (table_id,)
+    )
+    if not rows:
+        raise ValueError(f"ไม่พบโต๊ะ {table_id}")
+
+    # 2) โต๊ะต้องว่าง = ไม่มีออเดอร์อื่นที่ยัง 'open'
+    n = run_query(
+        "SELECT COUNT(*) AS n FROM food_order "
+        "WHERE table_id = %s AND status = 'open' AND order_id <> %s",
+        (table_id, order_id or 0,)
+    )[0]["n"]
+    if n > 0:
+        raise ValueError(f"โต๊ะ {table_id} ยังมีออเดอร์ที่ยังไม่ชำระเงิน")
 
 
 def create_order(data):
@@ -238,13 +246,16 @@ def create_order(data):
 
 
 def update_order(order_id, data):
-    """แก้ไข ออเดอร์ ตาม order_id
-    คำใบ้:
-      1) ถ้า status ใหม่ = 'open' → check_table_free(data["table_id"], order_id)
-         (ส่ง order_id ไปด้วย เพื่อไม่นับออเดอร์ตัวเอง)
-      2) UPDATE food_order SET ... WHERE order_id=%s"""
-    # TODO: เขียนตามคำใบ้
-    _todo("update_order")
+    """แก้ไข ออเดอร์ ตาม order_id"""
+    if data["status"] == "open":
+        check_table_free(data["table_id"], order_id)
+    return run_command(
+        "UPDATE food_order SET cust_id = %s, table_id = %s, "
+        "order_time = COALESCE(%s, order_time), status = %s "
+        "WHERE order_id = %s",
+        (data["cust_id"], data["table_id"],
+         blank_to_none(data["order_time"]), data["status"], order_id,)
+    )
 
 
 def delete_order(order_id):
