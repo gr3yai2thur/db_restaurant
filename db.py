@@ -39,11 +39,28 @@ def _todo(name):
 
 # ---------- ลูกค้า (customer) ----------
 def search_customers(filters):
-    """ค้นหา ลูกค้า ตามเงื่อนไข (name, phone, member_tier)
-    คำใบ้: เริ่มจาก sql = "SELECT * FROM customer WHERE 1=1"
-    แล้วต่อเงื่อนไขเฉพาะ filter ที่มีค่า (ข้อความใช้ LIKE %s, อื่น ๆ ใช้ = %s)"""
-    # TODO: เขียน SQL ค้นหาแบบยืดหยุ่นตาม filters (ใช้ %s เสมอ)
-    _todo("search_customers")
+    """ค้นหา ลูกค้า ตามเงื่อนไข (name, phone, member_tier)"""
+    sql = "SELECT * FROM customer WHERE 1=1"
+    params = []
+
+    name = filters.get("name")
+    if name:
+        sql += " AND name LIKE %s"
+        params.append(f"%{name}%")
+
+    phone = filters.get("phone")
+    if phone:
+        sql += " AND phone LIKE %s"
+        params.append(f"%{phone}%")
+
+    member_tier = filters.get("member_tier")
+    if member_tier:
+        sql += " AND member_tier = %s"
+        params.append(member_tier)
+
+    sql += " ORDER BY cust_id"
+
+    return run_query(sql, params)
 
 
 def get_customer(cust_id):
@@ -71,11 +88,38 @@ def delete_customer(cust_id):
 
 # ---------- เมนูอาหาร (menu_item) ----------
 def search_items(filters):
-    """ค้นหา เมนูอาหาร ตามเงื่อนไข (name, category)
-    คำใบ้: เริ่มจาก sql = "SELECT * FROM menu_item WHERE 1=1"
-    แล้วต่อเงื่อนไขเฉพาะ filter ที่มีค่า (ข้อความใช้ LIKE %s, อื่น ๆ ใช้ = %s)"""
-    # TODO: เขียน SQL ค้นหาแบบยืดหยุ่นตาม filters (ใช้ %s เสมอ)
-    _todo("search_items")
+    """ค้นหา เมนูอาหาร ตามเงื่อนไข (name, category)"""
+    sql = (
+        "SELECT m.item_id, m.name, c.name AS category, m.price, m.status "
+        "FROM menu_item m "
+        "JOIN category c ON c.category_id = m.category_id "
+        "WHERE 1=1"
+    )
+    params = []
+
+    name = filters.get("name")
+    if name:
+        sql += " AND m.name LIKE %s"
+        params.append(f"%{name}%")
+
+    category = filters.get("category")
+    if category:
+        sql += " AND c.name LIKE %s"
+        params.append(f"%{category}%")
+
+    category_id = filters.get("category_id")
+    if category_id:
+        sql += " AND m.category_id = %s"
+        params.append(category_id)
+
+    status = filters.get("status")
+    if status:
+        sql += " AND m.status = %s"
+        params.append(status)
+
+    sql += " ORDER BY m.item_id"
+
+    return run_query(sql, params)
 
 
 def get_item(item_id):
@@ -103,16 +147,40 @@ def delete_item(item_id):
 
 # ---------- ออเดอร์ (food_order) ----------
 def search_orders(filters):
-    """ค้นหา ออเดอร์ ตามเงื่อนไข (cust_id, table_id, status)
-    ต้องแสดงคอลัมน์: order_id, cust_id, ชื่อลูกค้า, table_id, order_time, status, total (ยอดรวม)
-    คำใบ้:
-      - JOIN customer เพื่อแสดงชื่อลูกค้า
-      - total (ยอดรวมของออเดอร์) ไม่ได้เก็บเป็นคอลัมน์ → ต้องคำนวณ = SUM(qty × price)
-        LEFT JOIN กับ subquery ที่รวมยอดของแต่ละ order_id (order_item JOIN menu_item ... GROUP BY order_id)
-        แล้วใช้ IFNULL(..., 0) เพราะออเดอร์ที่ยังไม่มีรายการอาหารจะได้ NULL
-      - เงื่อนไขทุกตัวใช้ = %s"""
-    # TODO: เขียน SQL ค้นหาแบบยืดหยุ่นตาม filters (ใช้ %s เสมอ)
-    _todo("search_orders")
+    """ค้นหา ออเดอร์ ตามเงื่อนไข (cust_id, table_id, status)"""
+    sql = (
+        "SELECT o.order_id, o.cust_id, c.name AS customer_name, "
+        "       o.table_id, o.order_time, o.status, "
+        "       IFNULL(t.total, 0) AS total "
+        "FROM food_order o "
+        "JOIN customer c ON c.cust_id = o.cust_id "
+        "LEFT JOIN ("
+        "    SELECT order_id, SUM(qty * unit_price) AS total "
+        "    FROM order_item "
+        "    GROUP BY order_id"
+        ") t ON t.order_id = o.order_id "
+        "WHERE 1=1"
+    )
+    params = []
+
+    cust_id = filters.get("cust_id")
+    if cust_id:
+        sql += " AND o.cust_id = %s"
+        params.append(cust_id)
+
+    table_id = filters.get("table_id")
+    if table_id:
+        sql += " AND o.table_id = %s"
+        params.append(table_id)
+
+    status = filters.get("status")
+    if status:
+        sql += " AND o.status = %s"
+        params.append(status)
+
+    sql += " ORDER BY o.order_id"
+
+    return run_query(sql, params)
 
 
 def get_order(order_id):
