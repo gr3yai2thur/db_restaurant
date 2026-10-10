@@ -27,8 +27,10 @@ const ENTITIES = {
         "type": "select",
         "options": [
           "",
+          "normal",
           "silver",
-          "gold"
+          "gold",
+          "VIP"
         ]
       }
     ],
@@ -57,6 +59,7 @@ const ENTITIES = {
         "label": "ระดับ",
         "type": "select",
         "options": [
+          "normal",
           "silver",
           "gold",
           "VIP"
@@ -65,7 +68,7 @@ const ENTITIES = {
       {
         "key": "points",
         "label": "แต้มสะสม",
-        "type": "text"
+        "type": "number"
       }
     ]
   },
