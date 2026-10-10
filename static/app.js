@@ -84,6 +84,18 @@ const ENTITIES = {
         "label": "หมวดหมู่",
         "type": "text"
       }
+      ,
+      {
+        "key": "status",
+        "label": "สถานะ",
+        "type": "select",
+        "options": [
+          "",
+          "available",
+          "sold_out",
+          "discontinued"
+        ]
+      }
     ],
     "form": [
       {
@@ -94,7 +106,7 @@ const ENTITIES = {
       {
         "key": "category_id",
         "label": "หมวดหมู่",
-        "type": "text"
+        "type": "number"
       },
       {
         "key": "price",
@@ -106,7 +118,6 @@ const ENTITIES = {
         "label": "พร้อมขาย",
         "type": "select",
         "options": [
-          "",
           "available",
           "sold_out",
           "discontinued"
