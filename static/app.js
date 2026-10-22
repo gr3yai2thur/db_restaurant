@@ -183,6 +183,78 @@ const ENTITIES = {
           "open",
           "paid"
         ]
+      },
+      {
+        "key": "payment_method",
+        "label": "วิธีชำระเงิน",
+        "type": "select",
+        "options": [
+          "",
+          "cash",
+          "card",
+          "qr"
+        ]
+      }
+    ]
+  },
+  "food_orders": {
+    "label": "สั่งอาหาร",
+    "api": "/api/order-items",
+    "idKey": null,           // composite PK — ใช้ compositeKey แทน
+    "compositeKey": ["order_id", "item_id"],
+    "search": [
+      {
+        "key": "order_id",
+        "label": "รหัสออเดอร์",
+        "type": "number"
+      },
+      {
+        "key": "table_id",
+        "label": "หมายเลขโต๊ะ",
+        "type": "number"
+      },
+      {
+        "key": "name",
+        "label": "ชื่อเมนูอาหาร",
+        "type": "text"
+      },
+      {
+        "key": "status",
+        "label": "สถานะเมนู",
+        "type": "select",
+        "options": [
+          "",
+          "available",
+          "sold_out",
+          "discontinued"
+        ]
+      }
+    ],
+    "form": [
+      {
+        "key": "order_id",
+        "label": "รหัสออเดอร์",
+        "type": "number"
+      },
+      {
+        "key": "item_id",
+        "label": "เมนูอาหาร",
+        "type": "select",
+        "optionsFrom": {
+          "api": "/api/menu-items",
+          "value": "item_id",
+          "label": "name"
+        }
+      },
+      {
+        "key": "qty",
+        "label": "จำนวน",
+        "type": "number"
+      },
+      {
+        "key": "note",
+        "label": "หมายเหตุ",
+        "type": "text"
       }
     ]
   }
@@ -242,11 +314,18 @@ function renderTable(r) {
   setStatus(st, "พบ " + rows.length + " รายการ");
   const cols = Object.keys(rows[0]);
   head.innerHTML = cols.map(c => "<th>" + c + "</th>").join("") + "<th>จัดการ</th>";
+  const cfg = ENTITIES[current];
   body.innerHTML = rows.map(row => {
-    const id = row[ENTITIES[current].idKey];
+    // รองรับทั้ง idKey ปกติ และ compositeKey (เช่น order_item)
+    let idStr;
+    if (cfg.compositeKey) {
+      idStr = cfg.compositeKey.map(k => encodeURIComponent(row[k])).join("/");
+    } else {
+      idStr = encodeURIComponent(row[cfg.idKey]);
+    }
     return "<tr>" + cols.map(c => "<td>" + (row[c] ?? "—") + "</td>").join("") +
-      '<td><button class="btn sm" onclick="editRow(' + id + ')">แก้ไข</button> ' +
-      '<button class="btn sm del" onclick="deleteRow(' + id + ')">ลบ</button></td></tr>';
+      '<td><button class="btn sm" onclick="editRow(\'' + idStr + '\')">แก้ไข</button> ' +
+      '<button class="btn sm del" onclick="deleteRow(\'' + idStr + '\')">ลบ</button></td></tr>';
   }).join("");
 }
 async function openForm(title, data = {}) {
@@ -256,15 +335,15 @@ async function openForm(title, data = {}) {
   $("#modal").classList.remove("hidden");
 }
 function collectForm() { const d = {}; formFields().filter(f => f.key).forEach(f => d[f.key] = $("#f_" + f.key).value); return d; }
-async function editRow(id) {
+async function editRow(idStr) {
   const cfg = ENTITIES[current];
-  const r = await api(cfg.api + "/" + id);
+  const r = await api(cfg.api + "/" + idStr);
   if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
-  editingId = id; openForm("แก้ไขข้อมูล", r.data);
+  editingId = idStr; openForm("แก้ไขข้อมูล", r.data);
 }
-async function deleteRow(id) {
+async function deleteRow(idStr) {
   if (!confirm("ยืนยันการลบ?")) return;
-  const r = await api(ENTITIES[current].api + "/" + id, { method: "DELETE" });
+  const r = await api(ENTITIES[current].api + "/" + idStr, { method: "DELETE" });
   if (!r.ok) { alert((r.todo ? "🚧 " : "⚠️ ") + r.error); return; }
   doSearch();
 }

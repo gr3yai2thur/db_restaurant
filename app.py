@@ -113,6 +113,29 @@ def order_delete(_id):
     return safe(db.delete_order, _id)
 
 
+# ---- รายการอาหารในออเดอร์ (order_item) ----
+@app.route("/api/order-items", methods=["GET"])
+def order_items_list():
+    filters = {k: v for k, v in request.args.items() if v}
+    return safe(db.search_order_items, filters)
+
+@app.route("/api/order-items", methods=["POST"])
+def order_item_create():
+    return safe(db.create_order_item, request.json)
+
+@app.route("/api/order-items/<int:order_id>/<int:item_id>", methods=["GET"])
+def order_item_get(order_id, item_id):
+    return safe(db.get_order_item, order_id, item_id)
+
+@app.route("/api/order-items/<int:order_id>/<int:item_id>", methods=["PUT"])
+def order_item_update(order_id, item_id):
+    return safe(db.update_order_item, order_id, item_id, request.json)
+
+@app.route("/api/order-items/<int:order_id>/<int:item_id>", methods=["DELETE"])
+def order_item_delete(order_id, item_id):
+    return safe(db.delete_order_item, order_id, item_id)
+
+
 # ---- รายงาน ----
 @app.route("/api/reports/summary")
 def report_summary():

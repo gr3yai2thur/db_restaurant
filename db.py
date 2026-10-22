@@ -238,10 +238,11 @@ def create_order(data):
     if data["status"] == "open":
         check_table_free(data["table_id"])
     return run_command(
-        "INSERT INTO food_order (cust_id, table_id, order_time, status) "
-        "VALUES (%s, %s, COALESCE(%s, NOW()), %s)",
+        "INSERT INTO food_order (cust_id, table_id, order_time, status, payment_method) "
+        "VALUES (%s, %s, COALESCE(%s, NOW()), %s, %s)",
         (data["cust_id"], data["table_id"],
-         blank_to_none(data["order_time"]), data["status"])
+         blank_to_none(data["order_time"]), data["status"],
+         blank_to_none(data.get("payment_method", "")))
     )
 
 
@@ -249,21 +250,168 @@ def update_order(order_id, data):
     """แก้ไข ออเดอร์ ตาม order_id"""
     if data["status"] == "open":
         check_table_free(data["table_id"], order_id)
+
+    # ดึง status ปัจจุบันของออเดอร์ก่อนเปลี่ยนแปลง
+    current = run_query(
+        "SELECT status, cust_id FROM food_order WHERE order_id = %s",
+        (order_id,)
+    )
+
+    # ห้ามแก้กลับจาก paid → open
+    if current and current[0]["status"] == "paid" and data["status"] == "open":
+        raise ValueError("ออเดอร์ที่ชำระเงินแล้วไม่สามารถเปลี่ยนสถานะกลับได้")
+
+    # ถ้าเปลี่ยน status เป็น 'paid' → บวก points ให้ลูกค้าอัตโนมัติ
+    if data["status"] == "paid":
+        # ตรวจว่า status เดิมยังเป็น 'open' อยู่ (กัน double points)
+        if current and current[0]["status"] == "open":
+            cust_id = current[0]["cust_id"]
+            # คำนวณยอดรวมออเดอร์จาก order_item
+            total_row = run_query(
+                "SELECT IFNULL(SUM(qty * unit_price), 0) AS total "
+                "FROM order_item WHERE order_id = %s",
+                (order_id,)
+            )
+            total = int(total_row[0]["total"]) if total_row else 0
+            # 1 point ต่อทุก 10 บาท (ปัดทิ้ง)
+            earned = total // 10
+            if earned > 0:
+                run_command(
+                    "UPDATE customer SET points = points + %s WHERE cust_id = %s",
+                    (earned, cust_id)
+                )
+            # อัปเกรด member_tier อัตโนมัติตาม points สะสม
+            pts_row = run_query(
+                "SELECT points FROM customer WHERE cust_id = %s", (cust_id,)
+            )
+            if pts_row:
+                total_pts = pts_row[0]["points"]
+                new_tier = (
+                    "vip"    if total_pts >= 2000 else
+                    "gold"   if total_pts >= 1000 else
+                    "silver" if total_pts >= 500  else
+                    "normal"
+                )
+                run_command(
+                    "UPDATE customer SET member_tier = %s WHERE cust_id = %s",
+                    (new_tier, cust_id)
+                )
+
     return run_command(
         "UPDATE food_order SET cust_id = %s, table_id = %s, "
-        "order_time = COALESCE(%s, order_time), status = %s "
+        "order_time = COALESCE(%s, order_time), status = %s, payment_method = %s "
         "WHERE order_id = %s",
         (data["cust_id"], data["table_id"],
-         blank_to_none(data["order_time"]), data["status"], order_id,)
+         blank_to_none(data["order_time"]), data["status"],
+         blank_to_none(data.get("payment_method", "")), order_id,)
     )
 
 
 def delete_order(order_id):
     """ลบ ออเดอร์ ตาม order_id"""
-    # TODO: DELETE FROM food_order WHERE order_id=%s
     return run_command(
         "DELETE FROM food_order WHERE order_id = %s",
         (order_id,)
+    )
+
+
+# ---------- รายการอาหารในออเดอร์ (order_item) ----------
+def search_order_items(filters):
+    """ค้นหา รายการอาหาร ตามเงื่อนไข (order_id, table_id, item_name, status)"""
+    sql = (
+        "SELECT oi.order_id, o.table_id, m.name AS item_name, "
+        "       oi.qty, oi.unit_price, (oi.qty * oi.unit_price) AS subtotal, "
+        "       oi.note, m.status "
+        "FROM order_item oi "
+        "JOIN food_order o ON o.order_id = oi.order_id "
+        "JOIN menu_item m  ON m.item_id  = oi.item_id "
+        "WHERE 1=1"
+    )
+    params = []
+
+    order_id = filters.get("order_id")
+    if order_id:
+        sql += " AND oi.order_id = %s"
+        params.append(order_id)
+
+    table_id = filters.get("table_id")
+    if table_id:
+        sql += " AND o.table_id = %s"
+        params.append(table_id)
+
+    name = filters.get("name")
+    if name:
+        sql += " AND m.name LIKE %s"
+        params.append(f"%{name}%")
+
+    status = filters.get("status")
+    if status:
+        sql += " AND m.status = %s"
+        params.append(status)
+
+    sql += " ORDER BY oi.order_id, m.name"
+    return run_query(sql, params)
+
+
+def get_order_item(order_id, item_id):
+    """ดึง รายการอาหาร 1 แถว ตาม (order_id, item_id)"""
+    rows = run_query(
+        "SELECT oi.order_id, oi.item_id, m.name AS item_name, "
+        "       oi.qty, oi.unit_price, oi.note "
+        "FROM order_item oi "
+        "JOIN menu_item m ON m.item_id = oi.item_id "
+        "WHERE oi.order_id = %s AND oi.item_id = %s",
+        (order_id, item_id)
+    )
+    return rows[0] if rows else None
+
+
+def create_order_item(data):
+    """เพิ่มเมนูเข้าออเดอร์ — data มีคีย์: order_id, item_id, qty, note
+    unit_price คัดลอกจากราคาปัจจุบันของเมนู อัตโนมัติ"""
+    # ตรวจว่าออเดอร์มีอยู่จริงและยังเป็น open
+    order_check = run_query(
+        "SELECT status FROM food_order WHERE order_id = %s",
+        (data["order_id"],)
+    )
+    if not order_check:
+        raise ValueError(f"ไม่พบออเดอร์ order_id={data['order_id']}")
+    if order_check[0]["status"] == "paid":
+        raise ValueError("ไม่สามารถสั่งอาหารเพิ่มในออเดอร์ที่ชำระเงินแล้ว")
+
+    # ดึงราคาปัจจุบันของเมนู
+    rows = run_query(
+        "SELECT price FROM menu_item WHERE item_id = %s",
+        (data["item_id"],)
+    )
+    if not rows:
+        raise ValueError(f"ไม่พบเมนู item_id={data['item_id']}")
+    unit_price = rows[0]["price"]
+
+    return run_command(
+        "INSERT INTO order_item (order_id, item_id, qty, unit_price, note) "
+        "VALUES (%s, %s, %s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE qty = qty + VALUES(qty), note = VALUES(note)",
+        (data["order_id"], data["item_id"],
+         data.get("qty", 1), unit_price,
+         blank_to_none(data.get("note", "")))
+    )
+
+
+def update_order_item(order_id, item_id, data):
+    """แก้ไข qty / note ของ order_item"""
+    return run_command(
+        "UPDATE order_item SET qty = %s, note = %s "
+        "WHERE order_id = %s AND item_id = %s",
+        (data["qty"], blank_to_none(data.get("note", "")), order_id, item_id)
+    )
+
+
+def delete_order_item(order_id, item_id):
+    """ลบ รายการอาหาร ออกจากออเดอร์"""
+    return run_command(
+        "DELETE FROM order_item WHERE order_id = %s AND item_id = %s",
+        (order_id, item_id)
     )
 
 
