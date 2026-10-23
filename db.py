@@ -452,7 +452,7 @@ def report_popular_items():
     return run_query(
         "SELECT m.item_id, m.name, SUM(oi.qty) AS total_qty "
         "FROM order_item oi "
-        "INNER JOIN menu_item m ON m.item_id = oi.item_id "
+        "JOIN menu_item m ON m.item_id = oi.item_id "
         "GROUP BY m.item_id, m.name "
         "ORDER BY total_qty DESC, m.item_id "
         "LIMIT 5"
@@ -464,7 +464,7 @@ def report_daily_sales():
         "SELECT DATE(o.order_time) AS day, "
         "SUM(oi.qty * oi.unit_price) AS total_sales "
         "FROM food_order o "
-        "INNER JOIN order_item oi ON oi.order_id = o.order_id "
+        "JOIN order_item oi ON oi.order_id = o.order_id "
         "GROUP BY DATE(o.order_time) "
         "ORDER BY day"
     )
@@ -475,7 +475,7 @@ def report_big_orders():
         "SELECT o.order_id, o.table_id, o.order_time, "
         "SUM(oi.qty * oi.unit_price) AS total "
         "FROM food_order o "
-        "INNER JOIN order_item oi ON oi.order_id = o.order_id "
+        "JOIN order_item oi ON oi.order_id = o.order_id "
         "GROUP BY o.order_id, o.table_id, o.order_time "
         "HAVING SUM(oi.qty * oi.unit_price) > 500 "
         "ORDER BY total DESC"
