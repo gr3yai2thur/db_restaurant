@@ -71,6 +71,8 @@ def get_customer(cust_id):
 
 def create_customer(data):
     """เพิ่ม ลูกค้า ใหม่ — data มีคีย์: name, phone, member_tier"""
+    if (len(data["phone"]) != 10):
+        raise ValueError("กรุณากรอกเบอร์ให้ถูกต้อง")
     return run_command(
         "INSERT INTO customer (name, gender, phone, member_tier, points) "
         "VALUES (%s, %s, %s, %s, %s)",
@@ -80,6 +82,8 @@ def create_customer(data):
 
 def update_customer(cust_id, data):
     """แก้ไข ลูกค้า ตาม cust_id"""
+    if (len(data["phone"]) != 10):
+        raise ValueError("กรุณากรอกเบอร์ให้ถูกต้อง")
     return run_command(
         "UPDATE customer SET name = %s, gender = %s, phone = %s, "
         "member_tier = %s, points = %s WHERE cust_id = %s",
@@ -436,14 +440,15 @@ def create_order_item(data):
         raise ValueError(f"ไม่พบออเดอร์ order_id={data['order_id']}")
     if order_check[0]["status"] == "paid":
         raise ValueError("ไม่สามารถสั่งอาหารเพิ่มในออเดอร์ที่ชำระเงินแล้ว")
-
-    # ดึงราคาปัจจุบันของเมนู
+    
     rows = run_query(
-        "SELECT price FROM menu_item WHERE item_id = %s",
+        "SELECT price, status FROM menu_item WHERE item_id = %s",
         (data["item_id"],)
     )
     if not rows:
         raise ValueError(f"ไม่พบเมนู item_id={data['item_id']}")
+    if rows[0]["status"] != "available":
+        raise ValueError("เมนูนี้ไม่พร้อมขาย!")
     unit_price = rows[0]["price"]
 
     # เมนูเดิมในออเดอร์เดียวกันมีได้เพียงหนึ่งแถว
