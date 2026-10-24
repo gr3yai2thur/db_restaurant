@@ -65,6 +65,7 @@ CREATE TABLE food_order (
     order_time   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     status       ENUM('open','paid') NOT NULL DEFAULT 'open',
     payment_method ENUM('cash','card','qr') NULL,
+    discount     INT NOT NULL DEFAULT 0,
 CONSTRAINT fk_order_cust  FOREIGN KEY (cust_id)
         REFERENCES customer(cust_id),
 CONSTRAINT fk_order_table FOREIGN KEY (table_id)
@@ -98,58 +99,6 @@ CONSTRAINT uq_combo_pair UNIQUE (item_id, sub_item_id),
 CONSTRAINT chk_combo_not_self CHECK (item_id <> sub_item_id)    
     -- TODO: item_id (FK -> menu_item), sub_item_id (FK -> menu_item), amount
 );
-
-------- View --------
-
--------- รายละเอียด Order --------
-CREATE VIEW v_order_total AS
-SELECT
-    o.order_id,
-    o.cust_id,
-    o.table_id,
-    o.order_time,
-    o.status,
-    o.payment_method,
-    SUM(oi.qty * oi.unit_price) AS total
-FROM food_order o
-JOIN order_item oi ON oi.order_id = o.order_id
-GROUP BY o.order_id, o.cust_id, o.table_id,
-         o.order_time, o.status, o.payment_method;
-
-------- รายละเอียด Combo --------
-CREATE VIEW v_combo_detail AS
-SELECT
-    cb.combo_id,
-    main.name AS combo_name,
-    main.price AS combo_price,
-    added.name  AS includes_item,
-    cb.amount
-FROM combo cb
-JOIN menu_item main ON main.item_id = cb.item_id
-JOIN menu_item added  ON added.item_id  = cb.sub_item_id;
-
--------- รายละเอียด Order --------
-CREATE VIEW v_order_detail AS
-SELECT
-    o.order_id,
-    o.order_time,
-    o.status,
-    c.name AS customer_name,
-    t.table_id,
-    t.zone,
-    m.name AS item_name,
-    cat.name AS category,
-    oi.qty,
-    oi.unit_price,
-    oi.qty * oi.unit_price AS total,
-    oi.note
-FROM food_order o
-JOIN order_item oi   ON oi.order_id = o.order_id
-JOIN menu_item m     ON m.item_id = oi.item_id
-JOIN category cat    ON cat.category_id = m.category_id
-JOIN dining_table t  ON t.table_id = o.table_id
-JOIN customer c      ON c.cust_id = o.cust_id
-ORDER BY o.order_id;
 
 -------- Insert Data --------
 
@@ -197,7 +146,13 @@ INSERT INTO dining_table (seats, zone) VALUES
 (2, 'Indoor'),
 (6, 'Outdoor'),
 (4, 'VIP'),
+(2, 'Outdoor'),
+(10, 'Indoor'),
+(6, 'Indoor'),
+(6, 'VIP'),
+(2, 'VIP'),
 (2, 'Outdoor');
+
 
 INSERT INTO food_order (cust_id, table_id, order_time, status, payment_method) VALUES
 (1, 2, '2026-09-24 12:15:00', 'paid', 'card'),
@@ -234,11 +189,3 @@ INSERT INTO combo (item_id, sub_item_id, amount) VALUES
 (16, 11, 1),  -- French Fries
 (16, 12, 1);  -- Coca-Cola
 --   ★ ควรมีออเดอร์ status 'open' อย่างน้อย 1 โต๊ะ ไว้ทดสอบ "เปิดออเดอร์ซ้ำโต๊ะเดิมไม่ได้"
-
-
-
-SELECT * FROM combo;
-select * from v_combo_detail;
-
-SELECT * 
-FROM v_order_total;

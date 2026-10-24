@@ -172,7 +172,9 @@ def search_orders(filters):
     sql = (
         "SELECT o.order_id, o.cust_id, c.name AS customer_name, "
         "       o.table_id, o.order_time, o.status, "
-        "       IFNULL(t.total, 0) AS total "
+        "       IFNULL(t.total, 0) AS total, "
+        "       o.discount, "
+        "       IFNULL(t.total, 0) - o.discount AS balance "
         "FROM food_order o "
         "JOIN customer c ON c.cust_id = o.cust_id "
         "LEFT JOIN ("
@@ -233,17 +235,66 @@ def check_table_free(table_id, order_id=None):
         raise ValueError(f"โต๊ะ {table_id} ยังมีออเดอร์ที่ยังไม่ชำระเงิน")
 
 
+def calculate_order_discount(order_id):
+    """คำนวณและอัปเดตส่วนลดของออเดอร์ตาม member_tier และยอดรวม
+    คืนค่า: (subtotal, discount_amount, final_total)"""
+    # ดึงข้อมูลออเดอร์และลูกค้า
+    order_info = run_query(
+        "SELECT o.order_id, c.member_tier "
+        "FROM food_order o "
+        "JOIN customer c ON c.cust_id = o.cust_id "
+        "WHERE o.order_id = %s",
+        (order_id,)
+    )
+    if not order_info:
+        return (0, 0, 0)
+    
+    tier = order_info[0]['member_tier']
+    
+    # คำนวณยอดรวมจาก order_item
+    total_row = run_query(
+        "SELECT IFNULL(SUM(qty * unit_price), 0) AS total "
+        "FROM order_item WHERE order_id = %s",
+        (order_id,)
+    )
+    subtotal = int(total_row[0]['total']) if total_row else 0
+    
+    # คำนวณเปอร์เซ็นต์ส่วนลดตาม tier
+    discount_percent = {
+        'normal': 0,
+        'silver': 5,
+        'gold': 10,
+        'vip': 15
+    }.get(tier, 0)
+    
+    # คำนวณจำนวนเงินส่วนลด
+    discount_amount = int(subtotal * discount_percent / 100)
+    final_total = subtotal - discount_amount
+    
+    # อัปเดตส่วนลดในฐานข้อมูล
+    run_command(
+        "UPDATE food_order SET discount = %s WHERE order_id = %s",
+        (discount_amount, order_id)
+    )
+    
+    return (subtotal, discount_amount, final_total)
+
+
 def create_order(data):
     """เพิ่ม ออเดอร์ ใหม่ — data มีคีย์: cust_id, table_id, order_time, status"""
     if data["status"] == "open":
         check_table_free(data["table_id"])
-    return run_command(
-        "INSERT INTO food_order (cust_id, table_id, order_time, status, payment_method) "
-        "VALUES (%s, %s, COALESCE(%s, NOW()), %s, %s)",
+    
+    # สร้างออเดอร์ (discount = 0 เพราะยังไม่มี order_item)
+    result = run_command(
+        "INSERT INTO food_order (cust_id, table_id, order_time, status, payment_method, discount) "
+        "VALUES (%s, %s, IFNULL(%s, NOW()), %s, %s, 0)",
         (data["cust_id"], data["table_id"],
          blank_to_none(data["order_time"]), data["status"],
          blank_to_none(data.get("payment_method", "")))
     )
+    
+    return result
 
 
 def update_order(order_id, data):
@@ -251,7 +302,7 @@ def update_order(order_id, data):
     if data["status"] == "open":
         check_table_free(data["table_id"], order_id)
 
-    # ดึง status ปัจจุบันของออเดอร์ก่อนเปลี่ยนแปลง
+    # ดึง status และ cust_id ปัจจุบันของออเดอร์ก่อนเปลี่ยนแปลง
     current = run_query(
         "SELECT status, cust_id FROM food_order WHERE order_id = %s",
         (order_id,)
@@ -266,14 +317,14 @@ def update_order(order_id, data):
         # ตรวจว่า status เดิมยังเป็น 'open' อยู่ (กัน double points)
         if current and current[0]["status"] == "open":
             cust_id = current[0]["cust_id"]
-            # คำนวณยอดรวมออเดอร์จาก order_item
+            # คำนวณยอดรวมออเดอร์จาก order_item (ยอดก่อนลด)
             total_row = run_query(
                 "SELECT IFNULL(SUM(qty * unit_price), 0) AS total "
                 "FROM order_item WHERE order_id = %s",
                 (order_id,)
             )
             total = int(total_row[0]["total"]) if total_row else 0
-            # 1 point ต่อทุก 10 บาท (ปัดทิ้ง)
+            # 1 point ต่อทุก 10 บาท (คิดจากยอดก่อนลด)
             earned = total // 10
             if earned > 0:
                 run_command(
@@ -297,14 +348,21 @@ def update_order(order_id, data):
                     (new_tier, cust_id)
                 )
 
-    return run_command(
+    # อัปเดตออเดอร์
+    result = run_command(
         "UPDATE food_order SET cust_id = %s, table_id = %s, "
-        "order_time = COALESCE(%s, order_time), status = %s, payment_method = %s "
+        "order_time = IFNULL(%s, order_time), status = %s, payment_method = %s "
         "WHERE order_id = %s",
         (data["cust_id"], data["table_id"],
          blank_to_none(data["order_time"]), data["status"],
          blank_to_none(data.get("payment_method", "")), order_id,)
     )
+    
+    # ถ้ามีการเปลี่ยนลูกค้า → คำนวณส่วนลดใหม่
+    if current and current[0]["cust_id"] != data["cust_id"]:
+        calculate_order_discount(order_id)
+    
+    return result
 
 
 def delete_order(order_id):
@@ -388,31 +446,58 @@ def create_order_item(data):
         raise ValueError(f"ไม่พบเมนู item_id={data['item_id']}")
     unit_price = rows[0]["price"]
 
-    return run_command(
-        "INSERT INTO order_item (order_id, item_id, qty, unit_price, note) "
-        "VALUES (%s, %s, %s, %s, %s) "
-        "ON DUPLICATE KEY UPDATE qty = qty + VALUES(qty), note = VALUES(note)",
-        (data["order_id"], data["item_id"],
-         data.get("qty", 1), unit_price,
-         blank_to_none(data.get("note", "")))
+    # เมนูเดิมในออเดอร์เดียวกันมีได้เพียงหนึ่งแถว
+    # ถ้ามีอยู่แล้วให้เพิ่มจำนวน; ถ้ายังไม่มีจึงเพิ่มแถวใหม่
+    existing = run_query(
+        "SELECT qty FROM order_item WHERE order_id = %s AND item_id = %s",
+        (data["order_id"], data["item_id"])
     )
+    if existing:
+        result = run_command(
+            "UPDATE order_item SET qty = qty + %s, note = %s "
+            "WHERE order_id = %s AND item_id = %s",
+            (data.get("qty", 1), blank_to_none(data.get("note", "")),
+             data["order_id"], data["item_id"])
+        )
+    else:
+        result = run_command(
+            "INSERT INTO order_item (order_id, item_id, qty, unit_price, note) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (data["order_id"], data["item_id"], data.get("qty", 1),
+             unit_price, blank_to_none(data.get("note", "")))
+        )
+    
+    # คำนวณส่วนลดใหม่ (เพราะยอดรวมเปลี่ยน)
+    calculate_order_discount(data["order_id"])
+    
+    return result
 
 
 def update_order_item(order_id, item_id, data):
     """แก้ไข qty / note ของ order_item"""
-    return run_command(
+    result = run_command(
         "UPDATE order_item SET qty = %s, note = %s "
         "WHERE order_id = %s AND item_id = %s",
         (data["qty"], blank_to_none(data.get("note", "")), order_id, item_id)
     )
+    
+    # คำนวณส่วนลดใหม่ (เพราะยอดรวมเปลี่ยน)
+    calculate_order_discount(order_id)
+    
+    return result
 
 
 def delete_order_item(order_id, item_id):
     """ลบ รายการอาหาร ออกจากออเดอร์"""
-    return run_command(
+    result = run_command(
         "DELETE FROM order_item WHERE order_id = %s AND item_id = %s",
         (order_id, item_id)
     )
+    
+    # คำนวณส่วนลดใหม่ (เพราะยอดรวมเปลี่ยน)
+    calculate_order_discount(order_id)
+    
+    return result
 
 
 # ============================================================
@@ -481,6 +566,24 @@ def report_big_orders():
         "ORDER BY total DESC"
     )
 
+
+def report_payment_method_sales():
+    """💳 ยอดขายแยกตามวิธีชำระเงิน (เฉพาะออเดอร์ที่ชำระแล้ว)"""
+    return run_query(
+        "SELECT IFNULL(o.payment_method, 'unspecified') AS payment_method, "
+        "COUNT(DISTINCT o.order_id) AS order_count, "
+        "SUM(t.subtotal - o.discount) AS totals "
+        "FROM food_order o "
+        "JOIN ("
+        "    SELECT order_id, SUM(qty * unit_price) AS subtotal "
+        "    FROM order_item "
+        "    GROUP BY order_id"
+        ") t ON t.order_id = o.order_id "
+        "WHERE o.status = 'paid' "
+        "GROUP BY o.payment_method "
+        "ORDER BY totals DESC"
+    )
+
 # ============================================================
 #  รายการรายงานที่แสดงบนหน้า /report  (เรียงตามลำดับที่แสดง)
 #  ★ วิธีเพิ่มรายงานใหม่ (ไม่ต้องแก้ไฟล์อื่น):
@@ -493,5 +596,6 @@ REPORTS = [
     ("popular-items", "📈 เมนูขายดี (Best Sellers)",        report_popular_items),
     ("daily-sales",   "💰 ยอดขายรวมต่อวัน (Daily Sales)",   report_daily_sales),
     ("big-orders",    "🧾 ออเดอร์ยอดเกิน 500 บาท (HAVING)", report_big_orders),
+    ("payment-method-sales", "💳 ยอดขายแยกตามวิธีชำระเงิน", report_payment_method_sales),
     # ("my-report", "📋 รายงานของฉัน", report_my_report),   ← ตัวอย่างการเพิ่มรายงานที่ 4
 ]
